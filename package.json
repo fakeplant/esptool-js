@@ -1,6 +1,7 @@
 {
   "name": "esptool-js",
   "version": "0.1.0",
+  "type": "module",
   "dependencies": {
     "crypto-js": "^4.0.0",
     "xterm": "^4.13.0"
