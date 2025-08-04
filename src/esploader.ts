@@ -1376,7 +1376,7 @@ export class ESPLoader {
       const uncsize = image.length;
       let blocks: number;
       if (options.compress) {
-        image = deflate(image, { level: 9 });
+        image = deflate(image, { level: 0 });
         blocks = await this.flashDeflBegin(uncsize, image.length, address);
       } else {
         blocks = await this.flashBegin(uncsize, address);
