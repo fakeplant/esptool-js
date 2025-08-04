@@ -1349,7 +1349,7 @@ export class ESPLoader {
 
       address = options.fileArray[i].address;
 
-      image = this._updateImageFlashParams(image, address, options.flashSize, options.flashMode, options.flashFreq);
+      // image = this._updateImageFlashParams(image, address, options.flashSize, options.flashMode, options.flashFreq);
       let calcmd5: string | null = null;
       if (options.calculateMD5Hash) {
         calcmd5 = options.calculateMD5Hash(image);
