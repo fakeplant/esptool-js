@@ -332,10 +332,12 @@ export class ESPLoader {
 
   /**
    * Convert a unsigned 8 bit integer array to byte string.
+   * @deprecated This function corrupts binary data with bytes > 127 or null bytes. Use Uint8Array directly instead.
    * @param {Uint8Array} u8Array - magic hex number to select ROM.
    * @returns {string} Return the equivalent string.
    */
   ui8ToBstr(u8Array: Uint8Array) {
+    console.warn("ui8ToBstr is deprecated and corrupts binary data. Use Uint8Array directly.");
     let bStr = "";
     for (let i = 0; i < u8Array.length; i++) {
       bStr += String.fromCharCode(u8Array[i]);
@@ -345,10 +347,12 @@ export class ESPLoader {
 
   /**
    * Convert a byte string to unsigned 8 bit integer array.
+   * @deprecated This function corrupts binary data with bytes > 127 or null bytes. Use Uint8Array directly instead.
    * @param {string} bStr - binary string input
    * @returns {Uint8Array} Return a 8 bit unsigned integer array.
    */
   bstrToUi8(bStr: string) {
+    console.warn("bstrToUi8 is deprecated and corrupts binary data. Use Uint8Array directly.");
     const u8Array = new Uint8Array(bStr.length);
     for (let i = 0; i < bStr.length; i++) {
       u8Array[i] = bStr.charCodeAt(i);
@@ -1252,7 +1256,13 @@ export class ESPLoader {
    * @param {string} flashFreq Flash frequency string
    * @returns {string} modified image string
    */
-  _updateImageFlashParams(image: string, address: number, flashSize: string, flashMode: string, flashFreq: string) {
+  _updateImageFlashParams(
+    image: Uint8Array,
+    address: number,
+    flashSize: string,
+    flashMode: string,
+    flashFreq: string,
+  ): Uint8Array {
     this.debug("_update_image_flash_params " + flashSize + " " + flashMode + " " + flashFreq);
     if (image.length < 8) {
       return image;
@@ -1265,9 +1275,10 @@ export class ESPLoader {
       return image;
     }
 
-    const magic = parseInt(image[0]);
-    let aFlashMode = parseInt(image[2]);
-    const flashSizeFreq = parseInt(image[3]);
+    const magic = image[0];
+    let aFlashMode = image[2];
+    const flashSizeFreq = image[3];
+
     if (magic !== this.ESP_IMAGE_MAGIC) {
       this.info(
         "Warning: Image file at 0x" +
@@ -1277,31 +1288,34 @@ export class ESPLoader {
       return image;
     }
 
-    /* XXX: Yet to implement actual image verification */
-
     if (flashMode !== "keep") {
       const flashModes: { [key: string]: number } = { qio: 0, qout: 1, dio: 2, dout: 3 };
       aFlashMode = flashModes[flashMode];
     }
+
     let aFlashFreq = flashSizeFreq & 0x0f;
     if (flashFreq !== "keep") {
       const flashFreqs: { [key: string]: number } = { "40m": 0, "26m": 1, "20m": 2, "80m": 0xf };
       aFlashFreq = flashFreqs[flashFreq];
     }
+
     let aFlashSize = flashSizeFreq & 0xf0;
     if (flashSize !== "keep") {
       aFlashSize = this.parseFlashSizeArg(flashSize);
     }
 
-    const flashParams = (aFlashMode << 8) | (aFlashFreq + aFlashSize);
-    this.info("Flash params set to " + flashParams.toString(16));
-    if (parseInt(image[2]) !== aFlashMode << 8) {
-      image = image.substring(0, 2) + (aFlashMode << 8).toString() + image.substring(2 + 1);
-    }
-    if (parseInt(image[3]) !== aFlashFreq + aFlashSize) {
-      image = image.substring(0, 3) + (aFlashFreq + aFlashSize).toString() + image.substring(3 + 1);
-    }
-    return image;
+    // Create new image only if we need to modify it
+    const newImage = new Uint8Array(image);
+
+    // Flash mode is stored directly in byte 2
+    newImage[2] = aFlashMode;
+
+    // Flash size and frequency are combined in byte 3
+    newImage[3] = (aFlashSize & 0xf0) | (aFlashFreq & 0x0f);
+
+    this.info(`Flash params set to mode:${aFlashMode} size:${(aFlashSize >> 4).toString(16)} freq:${aFlashFreq}`);
+
+    return newImage;
   }
 
   /**
@@ -1322,7 +1336,7 @@ export class ESPLoader {
     if (this.IS_STUB === true && options.eraseAll === true) {
       await this.eraseFlash();
     }
-    let image: string, address: number;
+    let image: Uint8Array, address: number;
     for (let i = 0; i < options.fileArray.length; i++) {
       this.debug("Data Length " + options.fileArray[i].data.length);
       image = options.fileArray[i].data;
@@ -1331,7 +1345,7 @@ export class ESPLoader {
         this.debug("Warning: File is empty");
         continue;
       }
-      image = this.ui8ToBstr(padTo(this.bstrToUi8(image), 4));
+      image = padTo(image, 4);
 
       address = options.fileArray[i].address;
 
@@ -1344,8 +1358,7 @@ export class ESPLoader {
       const uncsize = image.length;
       let blocks: number;
       if (options.compress) {
-        const uncimage = this.bstrToUi8(image);
-        image = this.ui8ToBstr(deflate(uncimage, { level: 9 }));
+        image = deflate(image, { level: 9 });
         blocks = await this.flashDeflBegin(uncsize, image.length, address);
       } else {
         blocks = await this.flashBegin(uncsize, address);
@@ -1375,7 +1388,7 @@ export class ESPLoader {
             Math.floor((100 * (seq + 1)) / blocks) +
             "%)",
         );
-        const block = this.bstrToUi8(image.slice(0, this.FLASH_WRITE_SIZE));
+        const block = image.slice(0, this.FLASH_WRITE_SIZE);
 
         if (options.compress) {
           const lenUncompressedPrevious = totalLenUncompressed;
@@ -1398,7 +1411,7 @@ export class ESPLoader {
           throw new ESPError("Yet to handle Non Compressed writes");
         }
         bytesSent += block.length;
-        image = image.slice(this.FLASH_WRITE_SIZE, image.length);
+        image = image.slice(this.FLASH_WRITE_SIZE);
         seq++;
         if (options.reportProgress) options.reportProgress(i, bytesSent, totalBytes);
       }
