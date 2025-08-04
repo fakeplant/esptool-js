@@ -1291,9 +1291,6 @@ export class ESPLoader {
       return image;
     }
 
-    // TODO: Add image verification here if you have BOOTLOADER_IMAGE class
-    // This is important for security and correctness
-
     // Check if this is not ESP8266 and has SHA256 appended
     const sha_appended = this.chip.CHIP_NAME !== "ESP8266" && image.length > 24 && image[8 + 15] === 1;
 
@@ -1333,7 +1330,7 @@ export class ESPLoader {
       this.info("SHA256 digest appended to image, need to recalculate");
       // TODO: Implement SHA256 recalculation
       // For now, just warn that this might cause issues
-      this.warning("SHA256 recalculation not implemented - image may fail verification!");
+      this.info("WARNING: SHA256 recalculation not implemented - image may fail verification!");
     }
 
     return newImage;
